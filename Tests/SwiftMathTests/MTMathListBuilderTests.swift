@@ -1451,4 +1451,12 @@ final class MTMathListBuilderTests: XCTestCase {
             XCTAssertEqual(MTMathListBuilder.mathListToString(list), "\\\(command) ^{1}_{0}x", command)
         }
     }
+
+    /// cis (cos + i sin) is a named function, set upright like \\cos.
+    func testCis() throws {
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: "r\\cis\\theta"))
+        let op = try XCTUnwrap(list.atoms[1] as? MTLargeOperator)
+        XCTAssertEqual(op.nucleus, "cis")
+        XCTAssertFalse(op.limits)
+    }
 }

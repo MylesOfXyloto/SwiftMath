@@ -294,6 +294,7 @@ public class MTMathAtomFactory {
         "arcsin" : MTMathAtomFactory.operatorWithName( "arcsin", limits: false),
         "sinh" : MTMathAtomFactory.operatorWithName( "sinh", limits: false),
         "cos" : MTMathAtomFactory.operatorWithName( "cos", limits: false),
+        "cis" : MTMathAtomFactory.operatorWithName( "cis", limits: false),  // cos + i sin
         "arccos" : MTMathAtomFactory.operatorWithName( "arccos", limits: false),
         "cosh" : MTMathAtomFactory.operatorWithName( "cosh", limits: false),
         "tan" : MTMathAtomFactory.operatorWithName( "tan", limits: false),

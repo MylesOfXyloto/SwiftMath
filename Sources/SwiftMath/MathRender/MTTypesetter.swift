@@ -451,10 +451,24 @@ class MTTypesetter {
         }
     }
     
+    /// A bracket group, `\left( … \right)`, is spaced like the brackets it's made of: as an open
+    /// bracket on its left and a close bracket on its right. TeX treats it as an Inner atom, which
+    /// puts a thin space between it and an ordinary neighbour: `2\left(x\right)` reads "2 (x)",
+    /// unlike `2(x)`. Spaced as brackets, the two look the same, at any height.
+    static func isBracketGroup(_ atom: MTMathAtom) -> Bool {
+        guard let inner = atom as? MTInner else { return false }
+        return inner.leftBoundary != nil || inner.rightBoundary != nil
+    }
+
+    /// The type that decides the space between `atom` and whatever follows it.
+    static func spacingTypeAfter(_ atom: MTMathAtom) -> MTMathAtomType {
+        isBracketGroup(atom) ? .close : atom.type
+    }
+
     func addInterElementSpace(_ prevNode:MTMathAtom?, currentType type:MTMathAtomType) {
         var interElementSpace = CGFloat(0)
         if prevNode != nil {
-            interElementSpace = getInterElementSpace(prevNode!.type, right:type)
+            interElementSpace = getInterElementSpace(Self.spacingTypeAfter(prevNode!), right:type)
         } else if self.spaced {
             // For the first atom of a spaced list, treat it as if it is preceded by an open.
             interElementSpace = getInterElementSpace(.open, right:type)
@@ -524,7 +538,7 @@ class MTTypesetter {
                     if prevNode != nil {
                         let subDisplay: MTDisplay = display!.subDisplays[0]
                         let subDisplayAtom = (subDisplay as? MTCTLineDisplay)!.atoms[0]
-                        let interElementSpace = self.getInterElementSpace(prevNode!.type, right:subDisplayAtom.type)
+                        let interElementSpace = self.getInterElementSpace(Self.spacingTypeAfter(prevNode!), right:subDisplayAtom.type)
                         if currentLine.length > 0 {
                             if interElementSpace > 0 {
                                 // add a kerning of that space to the previous character
@@ -607,7 +621,7 @@ class MTTypesetter {
                     if currentLine.length > 0 {
                         self.addDisplayLine()
                     }
-                    self.addInterElementSpace(prevNode, currentType:atom.type)
+                    self.addInterElementSpace(prevNode, currentType: Self.isBracketGroup(atom) ? .open : atom.type)
                     let inner =  atom as! MTInner?
                     var display : MTDisplay? = nil
                     if inner!.leftBoundary != nil || inner!.rightBoundary != nil {
@@ -697,7 +711,7 @@ class MTTypesetter {
                     // the rendering for all the rest is pretty similar
                     // All we need is render the character and set the interelement space.
                     if prevNode != nil {
-                        let interElementSpace = self.getInterElementSpace(prevNode!.type, right:atom.type)
+                        let interElementSpace = self.getInterElementSpace(Self.spacingTypeAfter(prevNode!), right:atom.type)
                         if currentLine.length > 0 {
                             if interElementSpace > 0 {
                                 // add a kerning of that space to the previous character

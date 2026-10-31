@@ -89,6 +89,32 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertGreaterThan(withSpace, correctionOnly)
     }
 
+    private func typesetWidth(_ latex: String) throws -> CGFloat {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex), latex)
+        return try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display), latex).width
+    }
+
+    /// A bracket group is spaced like the brackets it's made of, so around ordinary contents it
+    /// sets exactly as plain brackets do.
+    func testBracketGroupsAreSpacedAsBrackets() throws {
+        for (grouped, plain) in [(#"2\left(x+y\right)"#, "2(x+y)"), (#"\left(x\right)y"#, "(x)y"),
+                                 (#"\cos\left(n\theta\right)"#, #"\cos(n\theta)"#),
+                                 (#"a+\left(b\right)=c"#, "a+(b)=c")] {
+            XCTAssertEqual(try typesetWidth(grouped), try typesetWidth(plain), accuracy: 0.01, grouped)
+        }
+    }
+
+    /// Growing brackets sit against an ordinary neighbour too, rather than a thin space away.
+    func testTallBracketGroupsHugTheirNeighbours() throws {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: #"2\left(\frac{a}{b}\right)x"#))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        let two = try XCTUnwrap(display.subDisplays.first)
+        let group = display.subDisplays[1]
+        let x = display.subDisplays[2]
+        XCTAssertEqual(group.position.x, two.position.x + two.width, accuracy: 0.01)
+        XCTAssertEqual(x.position.x, group.position.x + group.width, accuracy: 0.01)
+    }
+
     func testMultipleVariables() throws {
         let mathList = MTMathAtomFactory.mathListForCharacters("xyzw")
         let display = MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display)!

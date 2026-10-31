@@ -528,9 +528,7 @@ class MTTypesetter {
                         if currentLine.length > 0 {
                             if interElementSpace > 0 {
                                 // add a kerning of that space to the previous character
-                                currentLine.addAttribute(kCTKernAttributeName as NSAttributedString.Key,
-                                                         value:NSNumber(floatLiteral: interElementSpace),
-                                                         range:currentLine.mutableString.rangeOfComposedCharacterSequence(at: currentLine.length-1))
+                                self.addKernToLastCharacter(interElementSpace)
                             }
                         } else {
                             // increase the space
@@ -703,9 +701,7 @@ class MTTypesetter {
                         if currentLine.length > 0 {
                             if interElementSpace > 0 {
                                 // add a kerning of that space to the previous character
-                                currentLine.addAttribute(kCTKernAttributeName as NSAttributedString.Key,
-                                                         value:NSNumber(floatLiteral: interElementSpace),
-                                                         range:currentLine.mutableString.rangeOfComposedCharacterSequence(at: currentLine.length-1))
+                                self.addKernToLastCharacter(interElementSpace)
                             }
                         } else {
                             // increase the space
@@ -751,6 +747,17 @@ class MTTypesetter {
                             currentPosition.x += delta;
                         }
                         self.makeScripts(atom, display:line, index:UInt(NSMaxRange(atom.indexRange) - 1), delta:delta)
+                    } else if atom.type == .ordinary && !atom.nucleus.isEmpty {
+                        // TeX adds a character's italic correction after it whenever no script
+                        // follows (The TeXbook, Appendix G, rule 17): room for the top of a
+                        // slanted letter to lean into. Without it a closing bracket or an
+                        // upright symbol crowds the letter, and (\theta) looks lopsided.
+                        let index = atom.nucleus.index(before: atom.nucleus.endIndex)
+                        let glyph = self.findGlyphForCharacterAtIndex(index, inString:atom.nucleus)
+                        let delta = styleFont.mathTable!.getItalicCorrection(glyph)
+                        if delta > 0 {
+                            self.addKernToLastCharacter(delta)
+                        }
                     }
             } // switch
             lastType = atom.type
@@ -767,6 +774,15 @@ class MTTypesetter {
         }
     }
     
+    /// Adds `amount` of space after the last character of the current line, on top of any
+    /// already there: an italic correction and an inter-element space can both apply.
+    func addKernToLastCharacter(_ amount: CGFloat) {
+        let key = kCTKernAttributeName as NSAttributedString.Key
+        let range = currentLine.mutableString.rangeOfComposedCharacterSequence(at: currentLine.length-1)
+        let existing = (currentLine.attribute(key, at: range.location, effectiveRange: nil) as? NSNumber)?.doubleValue ?? 0
+        currentLine.addAttribute(key, value: NSNumber(floatLiteral: existing + Double(amount)), range: range)
+    }
+
     @discardableResult
     func addDisplayLine() -> MTCTLineDisplay? {
         // add the font

@@ -63,6 +63,32 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(display.width, 11.44, accuracy: 0.01)
     }
 
+    /// The kern after the first character of the typeset line, if any.
+    private func kernAfterFirstCharacter(_ latex: String) throws -> Double {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        let line = try XCTUnwrap(display.subDisplays.first as? MTCTLineDisplay)
+        let string = try XCTUnwrap(line.attributedString)
+        let kern = string.attribute(kCTKernAttributeName as NSAttributedString.Key, at: 0, effectiveRange: nil)
+        return (kern as? NSNumber)?.doubleValue ?? 0
+    }
+
+    /// TeX's italic correction (The TeXbook, Appendix G, rule 17): a slanted letter
+    /// with no script after it gets room for its top before whatever follows.
+    func testItalicCorrectionBeforeClose() throws {
+        XCTAssertGreaterThan(try kernAfterFirstCharacter("f)"), 0)
+        XCTAssertGreaterThan(try kernAfterFirstCharacter("\\theta)"), 0)
+        // Upright characters have no correction.
+        XCTAssertEqual(try kernAfterFirstCharacter("1)"), 0)
+    }
+
+    /// The correction and the inter-element space both apply, one on top of the other.
+    func testItalicCorrectionAddsToInterElementSpace() throws {
+        let correctionOnly = try kernAfterFirstCharacter("f)")
+        let withSpace = try kernAfterFirstCharacter("f=")
+        XCTAssertGreaterThan(withSpace, correctionOnly)
+    }
+
     func testMultipleVariables() throws {
         let mathList = MTMathAtomFactory.mathListForCharacters("xyzw")
         let display = MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display)!
@@ -90,7 +116,7 @@ final class MTTypesetterTests: XCTestCase {
         
         XCTAssertEqual(display.ascent, 8.834, accuracy: 0.01)
         XCTAssertEqual(display.descent, 4.10, accuracy: 0.01)
-        XCTAssertEqual(display.width, 44.86, accuracy: 0.01)
+        XCTAssertEqual(display.width, 44.92, accuracy: 0.01)
     }
 
     func testVariablesAndNumbers() throws {
@@ -120,7 +146,7 @@ final class MTTypesetterTests: XCTestCase {
         
         XCTAssertEqual(display.ascent, 13.32, accuracy: 0.01)
         XCTAssertEqual(display.descent, 4.10, accuracy: 0.01)
-        XCTAssertEqual(display.width, 45.56, accuracy: 0.01)
+        XCTAssertEqual(display.width, 45.62, accuracy: 0.01)
     }
 
     func testEquationWithOperatorsAndRelations() throws {
@@ -150,7 +176,7 @@ final class MTTypesetterTests: XCTestCase {
         
         XCTAssertEqual(display.ascent, 13.32, accuracy: 0.01)
         XCTAssertEqual(display.descent, 4.10, accuracy: 0.01)
-        XCTAssertEqual(display.width, 92.36, accuracy: 0.01)
+        XCTAssertEqual(display.width, 92.92, accuracy: 0.01)
     }
 
 //    #define XCTAssertTrue(CGPointEqualToPoint(p1, p2, accuracy, ...) \
@@ -1245,8 +1271,8 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(display2.index, NSNotFound);
         XCTAssertEqual(display2.subDisplays.count, 3);
         let rowPos = [ 30.28, -2.68, -31.95 ]
-        // alignment is right, center, left.
-        let cellPos = [ [ 35.89, 65.89, 129.438 ], [ 45.89, 76.94, 129.438 ], [ 0, 87.66, 129.438] ]
+        // alignment is right, center, left. Cells after italic letters include their italic correction.
+        let cellPos = [ [ 35.89, 65.89, 130.598 ], [ 45.89, 77.52, 130.598 ], [ 0, 88.24, 130.598] ]
         // check the 3 rows of the matrix
         for i in 0..<3 {
             let sub0i = display2.subDisplays[i];
@@ -1562,14 +1588,15 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertFalse(line2.hasScript);
 
         let glyph = accentDisp.accent!
-        XCTAssertTrue(CGPointMake(3.47, 0).isEqual(to: glyph.position, accuracy: 0.01))
+        // centred over xyzw including w's italic correction
+        XCTAssertTrue(CGPointMake(3.50, 0).isEqual(to: glyph.position, accuracy: 0.01))
         XCTAssertTrue(NSEqualRanges(glyph.range, NSMakeRange(0, 1)))
         XCTAssertFalse(glyph.hasScript);
 
         // dimensions
         XCTAssertEqual(display.ascent, 14.98, accuracy: 0.01)
         XCTAssertEqual(display.descent, 4.10, accuracy: 0.01)
-        XCTAssertEqual(display.width, 44.86, accuracy: 0.01)
+        XCTAssertEqual(display.width, 44.92, accuracy: 0.01)
     }
 
 }

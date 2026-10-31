@@ -1438,4 +1438,17 @@ final class MTMathListBuilderTests: XCTestCase {
         let plain = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\sqrt {8}"))
         XCTAssertEqual(MTMathListBuilder.mathListToString(plain), "\\sqrt{8}")
     }
+
+    /// Multiple integrals are single large operators, set with the font's own glyphs.
+    func testMultipleIntegrals() throws {
+        let glyphs = ["iint": "\u{222C}", "iiint": "\u{222D}", "iiiint": "\u{2A0C}",
+                      "oiint": "\u{222F}", "oiiint": "\u{2230}"]
+        for (command, glyph) in glyphs {
+            let list = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\\(command)_0^1 x"), command)
+            let op = try XCTUnwrap(list.atoms.first as? MTLargeOperator, command)
+            XCTAssertEqual(op.nucleus, glyph, command)
+            XCTAssertNotNil(op.subScript, command)
+            XCTAssertEqual(MTMathListBuilder.mathListToString(list), "\\\(command) ^{1}_{0}x", command)
+        }
+    }
 }

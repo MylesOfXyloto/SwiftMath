@@ -540,6 +540,8 @@ public struct MTMathListBuilder {
         } else if command == "sqrt" {
             // A sqrt command with one argument
             let rad = MTRadical()
+            // Math mode ignores spaces, so `\sqrt [3]{x}` has a degree just as `\sqrt[3]{x}` does.
+            self.skipWhitespace()
             guard self.hasCharacters else {
                 rad.radicand = self.buildInternal(true)
                 return rad
@@ -656,6 +658,16 @@ public struct MTMathListBuilder {
             return nil;
         }
         return mutable;
+    }
+
+    /// Skips only whitespace, unlike `skipSpaces`, which also skips any non-ASCII character.
+    mutating func skipWhitespace() {
+        while self.hasCharacters {
+            if !self.getNextCharacter().isWhitespace {
+                self.unlookCharacter()
+                return
+            }
+        }
     }
 
     mutating func skipSpaces() {
@@ -798,6 +810,11 @@ public struct MTMathListBuilder {
             return frac
         } else if command == "sqrt" {
             let rad = MTRadical()
+            self.skipWhitespace()
+            guard self.hasCharacters else {
+                rad.radicand = self.buildInternal(true)
+                return rad
+            }
             let char = self.getNextCharacter()
             if char == "[" {
                 rad.degree = self.buildInternal(false, stopChar: "]")

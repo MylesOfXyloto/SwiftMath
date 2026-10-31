@@ -1427,5 +1427,15 @@ final class MTMathListBuilderTests: XCTestCase {
 //        }
 //    }
 
-}
 
+    /// Math mode ignores spaces, so a space before a root's degree mustn't lose the degree.
+    func testSqrtDegreeAfterSpace() throws {
+        for latex in ["\\sqrt [4] {8}", "\\sqrt[4]{8}", "\\sqrt  [4]{8}"] {
+            let list = try XCTUnwrap(MTMathListBuilder.build(fromString: latex), latex)
+            XCTAssertEqual(MTMathListBuilder.mathListToString(list), "\\sqrt[4]{8}", latex)
+        }
+        // A root without a degree, after a space, is still one.
+        let plain = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\sqrt {8}"))
+        XCTAssertEqual(MTMathListBuilder.mathListToString(plain), "\\sqrt{8}")
+    }
+}

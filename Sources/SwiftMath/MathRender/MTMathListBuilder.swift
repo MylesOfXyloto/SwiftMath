@@ -377,7 +377,9 @@ public struct MTMathListBuilder {
                     }
                 } else if atom.type == .inner {
                     if let inner = atom as? MTInner {
-                        if inner.leftBoundary != nil || inner.rightBoundary != nil {
+                        if inner.isMiddle, let delim = inner.leftBoundary {
+                            str += "\\middle\(delimToString(delim: delim)) "
+                        } else if inner.leftBoundary != nil || inner.rightBoundary != nil {
                             if inner.leftBoundary != nil {
                                 str += "\\left\(delimToString(delim: inner.leftBoundary!)) "
                             } else {
@@ -575,6 +577,19 @@ public struct MTMathListBuilder {
             let newInner = currentInnerAtom;
             currentInnerAtom = oldInner;
             return newInner;
+        } else if command == "middle" {
+            // e-TeX's \middle: a delimiter inside \left…\right, as tall as the group's own.
+            guard currentInnerAtom != nil else {
+                self.setError(.missingLeft, message:"Missing \\left for \\middle")
+                return nil
+            }
+            let middle = MTInner()
+            middle.isMiddle = true
+            middle.leftBoundary = self.getBoundaryAtom("middle")
+            if middle.leftBoundary == nil {
+                return nil
+            }
+            return middle
         } else if command == "overline" {
             // The overline command has 1 arguments
             let over = MTOverLine()

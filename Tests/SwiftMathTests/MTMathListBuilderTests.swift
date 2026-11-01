@@ -1459,4 +1459,19 @@ final class MTMathListBuilderTests: XCTestCase {
         XCTAssertEqual(op.nucleus, "cis")
         XCTAssertFalse(op.limits)
     }
+
+    /// e-TeX's \\middle, inside a \\left…\\right group.
+    func testMiddle() throws {
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\left(a\\middle|b\\right)"))
+        let group = try XCTUnwrap(list.atoms.first as? MTInner)
+        let middle = try XCTUnwrap(group.innerList?.atoms.first(where: { ($0 as? MTInner)?.isMiddle == true }) as? MTInner)
+        XCTAssertEqual(middle.leftBoundary?.nucleus, "|")
+        XCTAssertEqual(MTMathListBuilder.mathListToString(list), "\\left( a\\middle| b\\right) ")
+    }
+
+    func testMiddleOutsideAGroupIsAnError() {
+        var error: NSError? = nil
+        XCTAssertNil(MTMathListBuilder.build(fromString: "a\\middle|b", error: &error))
+        XCTAssertNotNil(error)
+    }
 }

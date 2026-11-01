@@ -471,12 +471,18 @@ public class MTInner: MTMathAtom {
         }
     }
     
+    /// A `\middle` delimiter rather than a group: its `leftBoundary` is the delimiter, and it
+    /// has no inner list or right boundary. Inside a `\left…\right` group it's drawn as tall
+    /// as the group's own delimiters.
+    public var isMiddle = false
+
     init(_ inner:MTInner?) {
         super.init(inner)
         self.type = .inner
         self.innerList = MTMathList(inner?.innerList)
         self.leftBoundary = MTMathAtom(inner?.leftBoundary)
         self.rightBoundary = MTMathAtom(inner?.rightBoundary)
+        self.isMiddle = inner?.isMiddle ?? false
     }
     
     override init() {

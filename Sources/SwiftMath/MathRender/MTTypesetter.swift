@@ -362,6 +362,9 @@ class MTTypesetter {
     }
     var cramped = false
     var spaced = false
+    /// How tall `\middle` delimiters in this list are drawn: the height of the enclosing
+    /// `\left…\right` group's delimiters, once it's known. Until then, their natural size.
+    var middleHeight: CGFloat?
     
     static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle) -> MTMathListDisplay? {
         let finalizedList = mathList?.finalized
@@ -375,10 +378,11 @@ class MTTypesetter {
     }
     
     // Internal
-    static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle, cramped:Bool, spaced:Bool) -> MTMathListDisplay? {
+    static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle, cramped:Bool, spaced:Bool, middleHeight:CGFloat? = nil) -> MTMathListDisplay? {
         assert(font != nil)
         let preprocessedAtoms = self.preprocessMathList(mathList)
         let typesetter = MTTypesetter(withFont:font, style:style, cramped:cramped, spaced:spaced)
+        typesetter.middleHeight = middleHeight
         typesetter.createDisplayAtoms(preprocessedAtoms)
         let lastAtom = mathList!.atoms.last
         let last = lastAtom?.indexRange ?? NSMakeRange(0, 0)
@@ -456,13 +460,24 @@ class MTTypesetter {
     /// puts a thin space between it and an ordinary neighbour: `2\left(x\right)` reads "2 (x)",
     /// unlike `2(x)`. Spaced as brackets, the two look the same, at any height.
     static func isBracketGroup(_ atom: MTMathAtom) -> Bool {
-        guard let inner = atom as? MTInner else { return false }
+        guard let inner = atom as? MTInner, !inner.isMiddle else { return false }
         return inner.leftBoundary != nil || inner.rightBoundary != nil
+    }
+
+    /// A `\middle` delimiter is spaced as an ordinary symbol: a thin space from a matrix either
+    /// side of it, none from a letter.
+    static func isMiddle(_ atom: MTMathAtom) -> Bool {
+        (atom as? MTInner)?.isMiddle == true
     }
 
     /// The type that decides the space between `atom` and whatever follows it.
     static func spacingTypeAfter(_ atom: MTMathAtom) -> MTMathAtomType {
-        isBracketGroup(atom) ? .close : atom.type
+        isBracketGroup(atom) ? .close : isMiddle(atom) ? .ordinary : atom.type
+    }
+
+    /// The type that decides the space between whatever precedes `atom` and it.
+    static func spacingTypeBefore(_ atom: MTMathAtom) -> MTMathAtomType {
+        isBracketGroup(atom) ? .open : isMiddle(atom) ? .ordinary : atom.type
     }
 
     func addInterElementSpace(_ prevNode:MTMathAtom?, currentType type:MTMathAtomType) {
@@ -621,10 +636,12 @@ class MTTypesetter {
                     if currentLine.length > 0 {
                         self.addDisplayLine()
                     }
-                    self.addInterElementSpace(prevNode, currentType: Self.isBracketGroup(atom) ? .open : atom.type)
+                    self.addInterElementSpace(prevNode, currentType: Self.spacingTypeBefore(atom))
                     let inner =  atom as! MTInner?
                     var display : MTDisplay? = nil
-                    if inner!.leftBoundary != nil || inner!.rightBoundary != nil {
+                    if inner!.isMiddle {
+                        display = self.makeMiddle(inner!)
+                    } else if inner!.leftBoundary != nil || inner!.rightBoundary != nil {
                         display = self.makeLeftRight(inner)
                     } else {
                         display = MTTypesetter.createLineForMathList(inner!.innerList, font:font, style:style, cramped:cramped)
@@ -1391,7 +1408,13 @@ class MTTypesetter {
     func makeLeftRight(_ inner: MTInner?) -> MTDisplay? {
         assert(inner!.leftBoundary != nil || inner!.rightBoundary != nil, "Inner should have a boundary to call this function");
         
-        let innerListDisplay = MTTypesetter.createLineForMathList(inner!.innerList, font:font, style:style, cramped:cramped, spaced:true)
+        // With \middle delimiters the list is set twice: measured with them at their smallest, so
+        // they don't add to the height they're about to be given, then set with them as tall as
+        // the group's. Typesetting changes the list it's given (it fuses letters in place), so the
+        // measuring is done on a copy.
+        let hasMiddle = inner!.innerList?.atoms.contains(where: Self.isMiddle) == true
+        var innerListDisplay = MTTypesetter.createLineForMathList(hasMiddle ? inner!.innerList?.finalized : inner!.innerList,
+                                                                  font:font, style:style, cramped:cramped, spaced:true, middleHeight: 0)
         let axisHeight = styleFont.mathTable!.axisHeight
         // delta is the max distance from the axis
         let delta = max(innerListDisplay!.ascent - axisHeight, innerListDisplay!.descent + axisHeight);
@@ -1400,7 +1423,11 @@ class MTTypesetter {
         // The size of the delimiter glyph should cover at least 90% of the formula or
         // be at most 5pt short.
         let glyphHeight = max(d1, d2);
-        
+
+        if hasMiddle {
+            innerListDisplay = MTTypesetter.createLineForMathList(inner!.innerList, font:font, style:style, cramped:cramped, spaced:true, middleHeight: glyphHeight)
+        }
+
         var innerElements = [MTDisplay]()
         var position = CGPoint.zero
         if inner!.leftBoundary != nil && !inner!.leftBoundary!.nucleus.isEmpty {
@@ -1424,6 +1451,14 @@ class MTTypesetter {
         return innerDisplay
     }
     
+    /// A `\middle` delimiter, as tall as the enclosing group's delimiters.
+    func makeMiddle(_ middle: MTInner) -> MTDisplay? {
+        guard let delimiter = middle.leftBoundary, !delimiter.nucleus.isEmpty,
+              let glyph = self.findGlyphForBoundary(delimiter.nucleus, withHeight: middleHeight ?? 0)
+        else { return MTMathListDisplay(withDisplays: [], range: middle.indexRange) }
+        return MTMathListDisplay(withDisplays: [glyph], range: middle.indexRange)
+    }
+
     func findGlyphForBoundary(_ delimiter:String, withHeight glyphHeight:CGFloat) -> MTDisplay? {
         var glyphAscent=CGFloat(0), glyphDescent=CGFloat(0), glyphWidth=CGFloat(0)
         let leftGlyph = self.findGlyphForCharacterAtIndex(delimiter.startIndex, inString:delimiter)

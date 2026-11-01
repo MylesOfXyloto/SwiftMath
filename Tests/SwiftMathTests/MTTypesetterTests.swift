@@ -115,6 +115,36 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(x.position.x, group.position.x + group.width, accuracy: 0.01)
     }
 
+    /// A \\middle delimiter is drawn as tall as the group's own delimiters, here around an
+    /// augmented matrix as a handwriting recogniser writes one.
+    func testMiddleGrowsWithItsGroup() throws {
+        let latex = #"\left( \begin{matrix} 1 & 0 \\ 0 & 1 \\ 0 & 0 \end{matrix} \middle| \begin{matrix} 1 \\ 1 \\ 1 \end{matrix} \right)"#
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        let group = try XCTUnwrap(display.subDisplays.first as? MTMathListDisplay)
+        let open = try XCTUnwrap(group.subDisplays.first)
+        let contents = try XCTUnwrap(group.subDisplays[1] as? MTMathListDisplay)
+        // [matrix, middle, matrix]
+        XCTAssertEqual(contents.subDisplays.count, 3)
+        let middle = contents.subDisplays[1]
+        XCTAssertEqual(middle.ascent + middle.descent, open.ascent + open.descent, accuracy: 0.5)
+        XCTAssertGreaterThan(middle.ascent + middle.descent, 2 * self.font.fontSize)
+    }
+
+    /// A group with \\middle is set twice, which mustn't set its letters twice: typesetting
+    /// fuses neighbouring letters in place, and a second pass over the same list would turn
+    /// "xy" into "xyy".
+    func testMiddleDoesNotDuplicateContent() throws {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: #"\left(xy\middle|z\right)"#))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        func text(_ d: MTDisplay) -> String {
+            if let line = d as? MTCTLineDisplay { return line.attributedString?.string ?? "" }
+            if let list = d as? MTMathListDisplay { return list.subDisplays.map(text).joined() }
+            return ""
+        }
+        XCTAssertEqual(text(display), "𝑥𝑦𝑧")
+    }
+
     func testMultipleVariables() throws {
         let mathList = MTMathAtomFactory.mathListForCharacters("xyzw")
         let display = MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display)!

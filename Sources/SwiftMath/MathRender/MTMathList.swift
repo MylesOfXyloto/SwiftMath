@@ -785,9 +785,11 @@ public class MTMathTable: MTMathAtom {
     
     override public var finalized: MTMathAtom {
         let table = super.finalized as! MTMathTable
-        for var row in table.cells {
-            for i in 0..<row.count {
-                row[i] = row[i].finalized
+        // By index: `for var row in table.cells` finalised copies of the rows
+        // and threw them away, leaving every cell as parsed.
+        for row in table.cells.indices {
+            for column in table.cells[row].indices {
+                table.cells[row][column] = table.cells[row][column].finalized
             }
         }
         return table
@@ -908,6 +910,11 @@ public class MTMathList : NSObject {
         let zeroRange = NSMakeRange(0, 0)
         
         var prevNode: MTMathAtom? = nil
+        // The last atom that decides whether an operator is binary or unary.
+        // A style change is invisible to its neighbours, as in TeX: every
+        // matrix cell starts with one, and the minus in a cell's `-2` is a
+        // sign, not an operator between the style and the 2.
+        var prevOperand: MTMathAtom? = nil
         for atom in self.atoms {
             let newNode = atom.finalized
             
@@ -918,12 +925,12 @@ public class MTMathList : NSObject {
             
             switch newNode.type {
             case .binaryOperator:
-                if isNotBinaryOperator(prevNode)  {
+                if isNotBinaryOperator(prevOperand)  {
                     newNode.type = .unaryOperator
                 }
             case .relation, .punctuation, .close:
-                if prevNode != nil && prevNode!.type == .binaryOperator {
-                    prevNode!.type = .unaryOperator
+                if prevOperand != nil && prevOperand!.type == .binaryOperator {
+                    prevOperand!.type = .unaryOperator
                 }
             case .number:
                 if prevNode != nil && prevNode!.type == .number && prevNode!.subScript == nil && prevNode!.superScript == nil {
@@ -934,9 +941,10 @@ public class MTMathList : NSObject {
             }
             finalizedList.add(newNode)
             prevNode = newNode
+            if newNode.type != .style { prevOperand = newNode }
         }
-        if prevNode != nil && prevNode!.type == .binaryOperator {
-            prevNode!.type = .unaryOperator
+        if prevOperand != nil && prevOperand!.type == .binaryOperator {
+            prevOperand!.type = .unaryOperator
         }
         return finalizedList
     }

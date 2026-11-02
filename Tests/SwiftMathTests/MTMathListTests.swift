@@ -621,4 +621,14 @@ final class MTMathListTests: XCTestCase {
         try checkListCopy(copy.cells[0][2], original:list2, forTest:self.description)
     }
 
+    /// A minus at the start of a matrix cell is a sign. The style atom every
+    /// cell starts with doesn't make it an operator.
+    func testMinusStartingAMatrixCellIsUnary() throws {
+        let list = MTMathListBuilder.build(fromString: "\\begin{matrix} 1 & -2 \\end{matrix}")!.finalized
+        let table = try XCTUnwrap(list.atoms.first as? MTMathTable)
+        let cell = table.cells[0][1]
+        XCTAssertEqual(cell.atoms.first?.type, .style)
+        XCTAssertEqual(cell.atoms[1].type, .unaryOperator)
+    }
+
 }

@@ -899,7 +899,9 @@ public class MTMathAtomFactory {
                 
                 return table
             } else if env == "cases" {
-                if table.numColumns != 2 {
+                // One column is fine, as in LaTeX: rows with no condition, or
+                // a block whose conditions are all written elsewhere.
+                if table.numColumns > 2 {
                     let message = "cases environment can only have 2 columns"
                     if error == nil {
                         error = NSError(domain: MTParseError, code: MTParseErrors.invalidNumColumns.rawValue, userInfo: [NSLocalizedDescriptionKey:message])

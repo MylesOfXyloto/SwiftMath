@@ -631,4 +631,19 @@ final class MTMathListTests: XCTestCase {
         XCTAssertEqual(cell.atoms[1].type, .unaryOperator)
     }
 
+
+    /// LaTeX accepts cases with a single column, and with rows of different
+    /// lengths; only more than two columns is an error.
+    func testCasesWithOneColumn() throws {
+        var error: NSError? = nil
+        let one = MTMathListBuilder.build(fromString: "\\begin{cases} x \\\\ y \\end{cases}", error: &error)
+        XCTAssertNil(error)
+        XCTAssertNotNil(one)
+        let ragged = MTMathListBuilder.build(fromString: "\\begin{cases} 1 & x>0 \\\\ 0 \\end{cases}", error: &error)
+        XCTAssertNil(error)
+        XCTAssertNotNil(ragged)
+        _ = MTMathListBuilder.build(fromString: "\\begin{cases} a & b & c \\end{cases}", error: &error)
+        XCTAssertNotNil(error)
+    }
+
 }

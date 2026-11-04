@@ -345,7 +345,7 @@ func getBboxDetails(_ bbox:CGRect, ascent:inout CGFloat, descent:inout CGFloat) 
 
 // MARK: - MTTypesetter
 
-class MTTypesetter {
+public class MTTypesetter {
     var font:MTFont!
     var displayAtoms = [MTDisplay]()
     var currentPosition = CGPoint.zero
@@ -366,7 +366,9 @@ class MTTypesetter {
     /// `\left…\right` group's delimiters, once it's known. Until then, their natural size.
     var middleHeight: CGFloat?
     
-    static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle) -> MTMathListDisplay? {
+    /// Typesets a math list without a view, for drawing straight into a
+    /// context — what `MTMathUILabel` does when it lays itself out.
+    public static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle) -> MTMathListDisplay? {
         let finalizedList = mathList?.finalized
         // default is not cramped
         return self.createLineForMathList(finalizedList, font:font, style:style, cramped:false)

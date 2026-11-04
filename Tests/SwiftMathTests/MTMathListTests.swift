@@ -659,4 +659,17 @@ final class MTMathListTests: XCTestCase {
         }
     }
 
+
+    /// Typesetting without a label, for drawing straight into a context, and
+    /// recolouring what was typeset.
+    func testTypesettingWithoutALabel() throws {
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\begin{pmatrix} 1 & \\frac{3}{k} \\end{pmatrix}"))
+        let font = try XCTUnwrap(MTFontManager.fontManager.defaultFont?.copy(withSize: 20))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(list, font: font, style: .display))
+        XCTAssertGreaterThan(display.width, 0)
+        display.position = CGPoint(x: 0, y: display.descent)
+        display.textColor = MTColor.red
+        XCTAssertEqual(display.textColor, MTColor.red)
+    }
+
 }

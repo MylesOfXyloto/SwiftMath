@@ -115,6 +115,22 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(x.position.x, group.position.x + group.width, accuracy: 0.01)
     }
 
+    /// Brackets around a tall group reach past its outer rows, where plain.tex would leave them
+    /// up to 5pt short; around one line they stay the font's own size.
+    func testBracketsCoverWhatTheyEnclose() throws {
+        let axis = try XCTUnwrap(self.font.mathTable).axisHeight
+        for latex in [#"\left( \begin{matrix} 1 \\ 2 \\ 3 \\ 4 \\ 5 \end{matrix} \right)"#,
+                      #"\begin{cases} x = 1 \\ y = 2 \\ z = 3 \end{cases}"#] {
+            let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+            let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+            let group = try XCTUnwrap(display.subDisplays.first as? MTMathListDisplay)
+            let open = try XCTUnwrap(group.subDisplays.first)
+            let contents = group.subDisplays[1]
+            let delta = max(contents.ascent - axis, contents.descent + axis)
+            XCTAssertGreaterThan(open.ascent + open.descent, 2 * delta, latex)
+        }
+    }
+
     /// A \\middle delimiter is drawn as tall as the group's own delimiters, here around an
     /// augmented matrix as a handwriting recogniser writes one.
     func testMiddleGrowsWithItsGroup() throws {

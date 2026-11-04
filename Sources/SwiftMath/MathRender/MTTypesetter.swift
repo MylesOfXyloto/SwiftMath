@@ -1406,6 +1406,9 @@ public class MTTypesetter {
     // Delimiter shortfall from plain.tex
     static let kDelimiterFactor = CGFloat(901)
     static let kDelimiterShortfallPoints = CGFloat(5)
+    /// How far a delimiter reaches past what it encloses, above and below, in ems, when it has to
+    /// be made taller than plain.tex's rule allows (see `makeLeftRight`).
+    static let kDelimiterOverhang = CGFloat(0.05)
     
     func makeLeftRight(_ inner: MTInner?) -> MTDisplay? {
         assert(inner!.leftBoundary != nil || inner!.rightBoundary != nil, "Inner should have a boundary to call this function");
@@ -1424,10 +1427,25 @@ public class MTTypesetter {
         let d2 = 2 * delta - MTTypesetter.kDelimiterShortfallPoints;  // This represents a shortfall of 5pt
         // The size of the delimiter glyph should cover at least 90% of the formula or
         // be at most 5pt short.
-        let glyphHeight = max(d1, d2);
+        var glyphHeight = max(d1, d2);
+        // That's enough for one line, which a delimiter of the font's own sizes covers anyway.
+        // But a delimiter built to a tall group's height comes out just that much short, and a
+        // matrix's or a cases block's outer rows poke out past its ends. When it would end
+        // inside what it encloses, it reaches a little past instead.
+        let boundaries = [inner!.leftBoundary, inner!.rightBoundary].compactMap { $0?.nucleus }.filter { !$0.isEmpty }
+        let fallsShort = boundaries.contains { delimiter in
+            guard let glyph = self.findGlyphForBoundary(delimiter, withHeight: glyphHeight) else { return false }
+            return glyph.ascent + glyph.descent < 2 * delta
+        }
+        if fallsShort {
+            glyphHeight = 2 * (delta + MTTypesetter.kDelimiterOverhang * styleFont.fontSize)
+        }
 
         if hasMiddle {
-            innerListDisplay = MTTypesetter.createLineForMathList(inner!.innerList, font:font, style:style, cramped:cramped, spaced:true, middleHeight: glyphHeight)
+            // As tall as the delimiters come out, which a ready-made size can make taller than asked.
+            let delimiterHeight = boundaries.compactMap { self.findGlyphForBoundary($0, withHeight: glyphHeight) }
+                .map { $0.ascent + $0.descent }.max() ?? glyphHeight
+            innerListDisplay = MTTypesetter.createLineForMathList(inner!.innerList, font:font, style:style, cramped:cramped, spaced:true, middleHeight: delimiterHeight)
         }
 
         var innerElements = [MTDisplay]()
@@ -1456,18 +1474,22 @@ public class MTTypesetter {
     /// A `\middle` delimiter, as tall as the enclosing group's delimiters.
     func makeMiddle(_ middle: MTInner) -> MTDisplay? {
         guard let delimiter = middle.leftBoundary, !delimiter.nucleus.isEmpty,
-              let glyph = self.findGlyphForBoundary(delimiter.nucleus, withHeight: middleHeight ?? 0)
+              let glyph = self.findGlyphForBoundary(delimiter.nucleus, withHeight: middleHeight ?? 0, matching: true)
         else { return MTMathListDisplay(withDisplays: [], range: middle.indexRange) }
         return MTMathListDisplay(withDisplays: [glyph], range: middle.indexRange)
     }
 
-    func findGlyphForBoundary(_ delimiter:String, withHeight glyphHeight:CGFloat) -> MTDisplay? {
+    /// A delimiter at least `glyphHeight` tall, centred on the axis. `matching` also builds it to
+    /// the height when the nearest ready-made size would be noticeably taller, so it can match
+    /// other delimiters, as a `\middle` bar does its group's brackets.
+    func findGlyphForBoundary(_ delimiter:String, withHeight glyphHeight:CGFloat, matching: Bool = false) -> MTDisplay? {
         var glyphAscent=CGFloat(0), glyphDescent=CGFloat(0), glyphWidth=CGFloat(0)
         let leftGlyph = self.findGlyphForCharacterAtIndex(delimiter.startIndex, inString:delimiter)
         let glyph = self.findGlyph(leftGlyph, withHeight:glyphHeight, glyphAscent:&glyphAscent, glyphDescent:&glyphDescent, glyphWidth:&glyphWidth)
         
         var glyphDisplay:MTDisplayDS?
-        if (glyphAscent + glyphDescent < glyphHeight) {
+        let overshoot = glyphAscent + glyphDescent - glyphHeight
+        if overshoot < 0 || (matching && overshoot > MTTypesetter.kDelimiterOverhang * styleFont.fontSize) {
             // we didn't find a pre-built glyph that is large enough
             glyphDisplay = self.constructGlyph(leftGlyph, withHeight:glyphHeight)
         }

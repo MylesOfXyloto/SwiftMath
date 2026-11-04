@@ -16,6 +16,9 @@ public class MTFont {
     var ctFont: CTFont!
     var mathTable: MTFontMathTable?
     var rawMathTable: NSDictionary?
+    /// Shared by every size of the same font: a glyph's name doesn't change
+    /// with its size.
+    var glyphNames = GlyphNameCache()
     
     init() {}
     
@@ -50,6 +53,7 @@ public class MTFont {
         newFont.defaultCGFont = self.defaultCGFont
         newFont.ctFont = CTFontCreateWithGraphicsFont(self.defaultCGFont, size, nil, nil)
         newFont.rawMathTable = self.rawMathTable
+        newFont.glyphNames = self.glyphNames
         newFont.mathTable = MTFontMathTable(withFont: newFont, mathTable: newFont.rawMathTable!)
         return newFont
     }
@@ -59,8 +63,11 @@ public class MTFont {
         return name ?? ""
     }
     
+    /// Looking a glyph up by name searches the font's whole name table, and
+    /// typesetting a delimiter asks for every size variant and piece of it —
+    /// enough to dominate typesetting a matrix. So each name is looked up once.
     func get(glyphWithName name:String) -> CGGlyph {
-        defaultCGFont.getGlyphWithGlyphName(name: name as CFString)
+        glyphNames.glyph(named: name) { defaultCGFont.getGlyphWithGlyphName(name: name as CFString) }
     }
     
     /** The size of this font in points. */
@@ -71,4 +78,20 @@ public class MTFont {
         self.defaultCGFont = nil
     }
     
+}
+
+/// Glyphs already found by name, for one font. Typesetting can happen on more
+/// than one thread, so it's locked.
+final class GlyphNameCache: @unchecked Sendable {
+    private var glyphs: [String: CGGlyph] = [:]
+    private let lock = NSLock()
+
+    func glyph(named name: String, lookUp: () -> CGGlyph) -> CGGlyph {
+        lock.lock()
+        defer { lock.unlock() }
+        if let glyph = glyphs[name] { return glyph }
+        let glyph = lookUp()
+        glyphs[name] = glyph
+        return glyph
+    }
 }

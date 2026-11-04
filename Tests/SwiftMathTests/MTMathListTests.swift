@@ -646,4 +646,17 @@ final class MTMathListTests: XCTestCase {
         XCTAssertNotNil(error)
     }
 
+
+    /// Remembered glyph lookups give what the font itself does, at every size.
+    func testGlyphNameLookupsAreRemembered() throws {
+        let font = try XCTUnwrap(MTFontManager.fontManager.defaultFont)
+        let bigger = font.copy(withSize: 40)
+        for name in ["parenleft", "parenleft.size3", "bracketleft", "braceleft", "x"] {
+            let direct = font.defaultCGFont.getGlyphWithGlyphName(name: name as CFString)
+            XCTAssertEqual(font.get(glyphWithName: name), direct)
+            XCTAssertEqual(font.get(glyphWithName: name), direct)
+            XCTAssertEqual(bigger.get(glyphWithName: name), direct)
+        }
+    }
+
 }

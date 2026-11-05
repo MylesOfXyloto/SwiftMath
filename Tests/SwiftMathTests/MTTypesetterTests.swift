@@ -131,6 +131,46 @@ final class MTTypesetterTests: XCTestCase {
         }
     }
 
+    /// The gap after a comma, in mu: how far on the next character starts, less the comma's
+    /// own width. The line is one run of text with the gaps in it, so it's measured inside it.
+    private func commaGap(_ latex: String) throws -> CGFloat {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        var lines = [MTCTLineDisplay]()
+        func collect(_ d: MTDisplay) {
+            if let line = d as? MTCTLineDisplay { lines.append(line) }
+            (d as? MTMathListDisplay)?.subDisplays.forEach(collect)
+        }
+        collect(display)
+        let line = try XCTUnwrap(lines.first { $0.attributedString?.string.contains(",") == true })
+        let text = try XCTUnwrap(line.attributedString)
+        let comma = (text.string as NSString).range(of: ",").location
+        // Where each character's glyph is drawn.
+        var positions: [Int: CGFloat] = [:]
+        let runs = CTLineGetGlyphRuns(CTLineCreateWithAttributedString(text)) as! [CTRun]
+        for run in runs {
+            let count = CTRunGetGlyphCount(run)
+            var points = [CGPoint](repeating: .zero, count: count)
+            var indices = [CFIndex](repeating: 0, count: count)
+            CTRunGetPositions(run, CFRange(location: 0, length: 0), &points)
+            CTRunGetStringIndices(run, CFRange(location: 0, length: 0), &indices)
+            for (index, point) in zip(indices, points) { positions[index] = point.x }
+        }
+        var glyph = CGGlyph(0), character: UniChar = 0x2C
+        CTFontGetGlyphsForCharacters(self.font.ctFont, &character, &glyph, 1)
+        let advance = CTFontGetAdvancesForGlyphs(self.font.ctFont, .horizontal, &glyph, nil, 1)
+        let start = try XCTUnwrap(positions[comma]), next = try XCTUnwrap(positions[comma + 1])
+        return (next - start - advance) / self.font.mathTable!.muUnit
+    }
+
+    /// A comma between statements is followed by a quad; one inside brackets keeps TeX's thin
+    /// space.
+    func testCommasBetweenStatementsGetAQuad() throws {
+        XCTAssertEqual(try commaGap("x=1, y=2"), 18, accuracy: 0.01)
+        XCTAssertEqual(try commaGap("f(x, y)"), 3, accuracy: 0.01)
+        XCTAssertEqual(try commaGap(#"\left(x, y\right)"#), 3, accuracy: 0.01)
+    }
+
     /// A \\middle delimiter is drawn as tall as the group's own delimiters, here around an
     /// augmented matrix as a handwriting recogniser writes one.
     func testMiddleGrowsWithItsGroup() throws {

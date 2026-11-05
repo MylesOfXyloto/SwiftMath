@@ -365,13 +365,22 @@ public class MTTypesetter {
     /// How tall `\middle` delimiters in this list are drawn: the height of the enclosing
     /// `\left…\right` group's delimiters, once it's known. Until then, their natural size.
     var middleHeight: CGFloat?
+
+    /// Whether this line is a whole expression, or a table cell of one, rather than a part of
+    /// one — a numerator, a script, a `\left…\right` group. Only there can a comma separate
+    /// statements, as in `x = 1, y = 2`.
+    var isStatementLevel = false
+
+    /// How many brackets in this line are open at the atom being placed.
+    private var bracketDepth = 0
     
     /// Typesets a math list without a view, for drawing straight into a
     /// context — what `MTMathUILabel` does when it lays itself out.
     public static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle) -> MTMathListDisplay? {
         let finalizedList = mathList?.finalized
         // default is not cramped
-        return self.createLineForMathList(finalizedList, font:font, style:style, cramped:false)
+        return self.createLineForMathList(finalizedList, font:font, style:style, cramped:false, spaced:false,
+                                          isStatementLevel: true)
     }
     
     // Internal
@@ -380,11 +389,12 @@ public class MTTypesetter {
     }
     
     // Internal
-    static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle, cramped:Bool, spaced:Bool, middleHeight:CGFloat? = nil) -> MTMathListDisplay? {
+    static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle, cramped:Bool, spaced:Bool, middleHeight:CGFloat? = nil, isStatementLevel: Bool = false) -> MTMathListDisplay? {
         assert(font != nil)
         let preprocessedAtoms = self.preprocessMathList(mathList)
         let typesetter = MTTypesetter(withFont:font, style:style, cramped:cramped, spaced:spaced)
         typesetter.middleHeight = middleHeight
+        typesetter.isStatementLevel = isStatementLevel
         typesetter.createDisplayAtoms(preprocessedAtoms)
         let lastAtom = mathList!.atoms.last
         let last = lastAtom?.indexRange ?? NSMakeRange(0, 0)
@@ -499,6 +509,12 @@ public class MTTypesetter {
         var prevNode:MTMathAtom? = nil
         var lastType:MTMathAtomType!
         for atom in preprocessed {
+            // Counted once the atom is placed, so the space before a bracket is measured
+            // from outside it.
+            defer {
+                if atom.type == .open { bracketDepth += 1 }
+                if atom.type == .close { bracketDepth = max(0, bracketDepth - 1) }
+            }
             switch atom.type {
                 case .number, .variable,. unaryOperator:
                     // These should never appear as they should have been removed by preprocessing
@@ -851,6 +867,12 @@ public class MTTypesetter {
     }
     
     func getInterElementSpace(_ left: MTMathAtomType, right:MTMathAtomType) -> CGFloat {
+        // A comma between statements — `x = 1, y = 2` — is followed by a quad, as if written
+        // `,\quad`. TeX's thin space stays for one inside brackets, `f(x, y)` or `(1, 2)`, and in
+        // any part of an expression smaller than the whole. A departure from TeX.
+        if left == .punctuation, isStatementLevel, bracketDepth == 0, style.isNotScript {
+            return 18 * styleFont.mathTable!.muUnit
+        }
         let leftIndex = getInterElementSpaceArrayIndexForType(left, row: true)
         let rightIndex = getInterElementSpaceArrayIndexForType(right, row: false)
         let spaceArray = getInterElementSpaces()[Int(leftIndex)]

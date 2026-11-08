@@ -525,8 +525,9 @@ public struct MTMathListBuilder {
             // The command is an accent
             accent.innerList = self.buildInternal(true)
             return accent;
-        } else if command == "frac" {
-            // A fraction command has 2 arguments
+        } else if command == "frac" || command == "dfrac" || command == "tfrac" {
+            // A fraction command has 2 arguments. \dfrac and \tfrac, which only fix its size, are
+            // read as \frac — a recogniser writes them for any fraction.
             let frac = MTFraction()
             frac.numerator = self.buildInternal(true)
             frac.denominator = self.buildInternal(true)
@@ -811,7 +812,7 @@ public struct MTMathListBuilder {
         if let accent = MTMathAtomFactory.accent(withName: command) {
             accent.innerList = self.buildInternal(true)
             return accent
-        } else if command == "frac" {
+        } else if command == "frac" || command == "dfrac" || command == "tfrac" {
             let frac = MTFraction()
             frac.numerator = self.buildInternal(true)
             frac.denominator = self.buildInternal(true)

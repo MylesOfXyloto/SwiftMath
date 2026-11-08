@@ -1474,4 +1474,13 @@ final class MTMathListBuilderTests: XCTestCase {
         XCTAssertNil(MTMathListBuilder.build(fromString: "a\\middle|b", error: &error))
         XCTAssertNotNil(error)
     }
+
+    /// \dfrac and \tfrac read as fractions, as a handwriting recogniser writes them.
+    func testDfracAndTfracAreFractions() throws {
+        for latex in [#"\dfrac{3}{2}"#, #"\tfrac{1}{2}"#] {
+            let list = try XCTUnwrap(MTMathListBuilder.build(fromString: latex), latex)
+            XCTAssertEqual(list.atoms.count, 1, latex)
+            XCTAssertEqual(list.atoms.first?.type, .fraction, latex)
+        }
+    }
 }

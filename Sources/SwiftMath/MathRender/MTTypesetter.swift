@@ -376,11 +376,16 @@ public class MTTypesetter {
     
     /// Typesets a math list without a view, for drawing straight into a
     /// context — what `MTMathUILabel` does when it lays itself out.
-    public static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle) -> MTMathListDisplay? {
+    ///
+    /// `separatesStatements`: whether the list stands on its own, so that a comma at its top
+    /// level separates statements and is followed by a quad. Off for maths inside a sentence,
+    /// where a comma separates the items of a list, `A, B \in X`, and keeps TeX's thin space.
+    public static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle,
+                                             separatesStatements: Bool = true) -> MTMathListDisplay? {
         let finalizedList = mathList?.finalized
         // default is not cramped
         return self.createLineForMathList(finalizedList, font:font, style:style, cramped:false, spaced:false,
-                                          isStatementLevel: true)
+                                          isStatementLevel: separatesStatements)
     }
     
     // Internal

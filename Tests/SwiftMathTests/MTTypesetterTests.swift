@@ -133,9 +133,11 @@ final class MTTypesetterTests: XCTestCase {
 
     /// The gap after a comma, in mu: how far on the next character starts, less the comma's
     /// own width. The line is one run of text with the gaps in it, so it's measured inside it.
-    private func commaGap(_ latex: String) throws -> CGFloat {
+    private func commaGap(_ latex: String, style: MTLineStyle = .display,
+                          separatesStatements: Bool = true) throws -> CGFloat {
         let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
-        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: style,
+                                                                      separatesStatements: separatesStatements))
         var lines = [MTCTLineDisplay]()
         func collect(_ d: MTDisplay) {
             if let line = d as? MTCTLineDisplay { lines.append(line) }
@@ -169,6 +171,13 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(try commaGap("x=1, y=2"), 18, accuracy: 0.01)
         XCTAssertEqual(try commaGap("f(x, y)"), 3, accuracy: 0.01)
         XCTAssertEqual(try commaGap(#"\left(x, y\right)"#), 3, accuracy: 0.01)
+    }
+
+    /// Maths inside a sentence separates no statements: its commas list things, `A, B`, and
+    /// keep the thin space.
+    func testCommasInsideASentenceStayThin() throws {
+        XCTAssertEqual(try commaGap(#"A, B \in X"#, style: .text, separatesStatements: false), 3, accuracy: 0.01)
+        XCTAssertEqual(try commaGap("x=1, y=2", style: .text, separatesStatements: false), 3, accuracy: 0.01)
     }
 
     /// A \\middle delimiter is drawn as tall as the group's own delimiters, here around an

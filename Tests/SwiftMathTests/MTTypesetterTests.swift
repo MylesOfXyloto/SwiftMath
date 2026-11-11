@@ -173,6 +173,40 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertEqual(try commaGap(#"\left(x, y\right)"#), 3, accuracy: 0.01)
     }
 
+    /// A comma that lists things — no relation on one side of it — keeps the thin space, even
+    /// in maths that stands on its own.
+    func testCommasInAListStayThin() throws {
+        XCTAssertEqual(try commaGap(#"n, k \in \mathbb{N}"#), 3, accuracy: 0.01)
+        XCTAssertEqual(try commaGap("a, b, c > 0"), 3, accuracy: 0.01)
+        XCTAssertEqual(try commaGap("x = 1, 2"), 3, accuracy: 0.01)
+    }
+
+    /// The rows of a table display, top first.
+    private func tableRows(_ latex: String) throws -> [MTDisplay] {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        func find(_ d: MTDisplay) -> [MTDisplay]? {
+            guard let list = d as? MTMathListDisplay else { return nil }
+            let rows = list.subDisplays
+            if rows.count == 2, rows.allSatisfy({ $0 is MTMathListDisplay }), rows[0].position.y > rows[1].position.y {
+                return rows
+            }
+            return rows.lazy.compactMap(find).first
+        }
+        return try XCTUnwrap(find(display))
+    }
+
+    /// Cases rows are a jot further apart than TeX's plain baselines: 1.5em between short
+    /// rows, and at least 0.4em of clear space between tall ones.
+    func testCasesRowsReadApart() throws {
+        let em = self.font.fontSize
+        let short = try tableRows(#"\begin{cases} 1 & x = 0 \\ 2 & x > 0 \end{cases}"#)
+        XCTAssertEqual(short[0].position.y - short[1].position.y, 1.5 * em, accuracy: 0.01)
+        let tall = try tableRows(#"\begin{cases} n = 4k & \left( \begin{matrix} 1 & 0 \\ 0 & 1 \end{matrix} \right) \\ n = 2k & \left( \begin{matrix} -1 & 0 \\ 0 & -1 \end{matrix} \right) \end{cases}"#)
+        let gap = (tall[0].position.y - tall[0].descent) - (tall[1].position.y + tall[1].ascent)
+        XCTAssertGreaterThanOrEqual(gap, 0.4 * em - 0.01)
+    }
+
     /// Maths inside a sentence separates no statements: its commas list things, `A, B`, and
     /// keep the thin space.
     func testCommasInsideASentenceStayThin() throws {

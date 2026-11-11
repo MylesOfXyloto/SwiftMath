@@ -909,7 +909,9 @@ public class MTMathAtomFactory {
                     return nil
                 }
                 
-                table.interRowAdditionalSpacing = 0
+                // A jot between rows, as amsmath's aligned environments have: rows
+                // read apart, and tall ones — a matrix per case — don't touch.
+                table.interRowAdditionalSpacing = 1
                 table.interColumnSpacing = 18
                 
                 table.set(alignment: .left, forColumn: 0)

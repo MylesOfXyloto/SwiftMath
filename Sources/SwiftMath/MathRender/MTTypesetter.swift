@@ -373,6 +373,13 @@ public class MTTypesetter {
 
     /// How many brackets in this line are open at the atom being placed.
     private var bracketDepth = 0
+
+    /// The top-level commas of a statement-level line that sit between two statements — a
+    /// relation on each side, `x = 1, y = 2` — by their index in the line.
+    private var statementCommas: Set<Int> = []
+
+    /// Whether the comma placed last is one of those.
+    private var lastCommaSeparatesStatements = false
     
     /// Typesets a math list without a view, for drawing straight into a
     /// context — what `MTMathUILabel` does when it lays itself out.
@@ -513,10 +520,14 @@ public class MTTypesetter {
         // convert to a list of DisplayAtoms
         var prevNode:MTMathAtom? = nil
         var lastType:MTMathAtomType!
-        for atom in preprocessed {
+        if isStatementLevel { statementCommas = Self.statementCommas(in: preprocessed) }
+        for (index, atom) in preprocessed.enumerated() {
             // Counted once the atom is placed, so the space before a bracket is measured
             // from outside it.
             defer {
+                if atom.type == .punctuation, bracketDepth == 0 {
+                    lastCommaSeparatesStatements = statementCommas.contains(index)
+                }
                 if atom.type == .open { bracketDepth += 1 }
                 if atom.type == .close { bracketDepth = max(0, bracketDepth - 1) }
             }
@@ -871,11 +882,38 @@ public class MTTypesetter {
         }
     }
     
+    /// The top-level commas with a statement on each side: a relation at the top level both
+    /// between the comma and the one before it (or the start) and between it and the next (or
+    /// the end). `x = 1, y = 2` has one; a list, `n, k \in \mathbb{N}` or `5,` in a cases row,
+    /// has none.
+    static func statementCommas(in atoms: [MTMathAtom]) -> Set<Int> {
+        var depth = 0
+        var commas: [Int] = []
+        var segmentHasRelation = [false]
+        for (index, atom) in atoms.enumerated() {
+            switch atom.type {
+            case .open: depth += 1
+            case .close: depth = max(0, depth - 1)
+            case .relation where depth == 0: segmentHasRelation[segmentHasRelation.count - 1] = true
+            case .punctuation where depth == 0:
+                commas.append(index)
+                segmentHasRelation.append(false)
+            default: break
+            }
+        }
+        var result: Set<Int> = []
+        for (n, index) in commas.enumerated() where segmentHasRelation[n] && segmentHasRelation[n + 1] {
+            result.insert(index)
+        }
+        return result
+    }
+
     func getInterElementSpace(_ left: MTMathAtomType, right:MTMathAtomType) -> CGFloat {
         // A comma between statements — `x = 1, y = 2` — is followed by a quad, as if written
         // `,\quad`. TeX's thin space stays for one inside brackets, `f(x, y)` or `(1, 2)`, and in
         // any part of an expression smaller than the whole. A departure from TeX.
-        if left == .punctuation, isStatementLevel, bracketDepth == 0, style.isNotScript {
+        if left == .punctuation, isStatementLevel, bracketDepth == 0, lastCommaSeparatesStatements,
+           style.isNotScript {
             return 18 * styleFont.mathTable!.muUnit
         }
         let leftIndex = getInterElementSpaceArrayIndexForType(left, row: true)

@@ -6,7 +6,11 @@ import XCTest
 /// stretched delimiters, a fraction, a radical, blackboard letters.
 final class BundledFontsTests: XCTestCase {
 
-    static let added = ["NewCMMath-Regular", "NewCMMath-Book"]
+    static let added = [
+        "NewCMMath-Regular", "NewCMMath-Book", "NewCMMath-Bold",
+        "texgyrepagella-math", "texgyrebonum-math", "texgyreschola-math",
+        "KpMath-Regular", "KpMath-Semibold", "KpMath-Bold",
+    ]
 
     func testEachFontTypesets() throws {
         let latex = #"\left\{ \frac{a+1}{b^{2}} \;\middle|\; \sqrt{y} \in \mathbb{F}^{n} \right\}"#

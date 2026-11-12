@@ -925,6 +925,19 @@ final class MTMathListBuilderTests: XCTestCase {
         XCTAssertEqual(latex, "\\bar{x}", desc);
     }
 	
+    func testOverArrows() throws {
+        for (str, nucleus) in [("\\overrightarrow{x}", "\u{20D7}"), ("\\overleftarrow{AB}", "\u{20D6}")] {
+            var error: NSError? = nil
+            let list = MTMathListBuilder.build(fromString: str, error: &error)
+            XCTAssertNil(error, str)
+            let accent = try XCTUnwrap(list?.atoms.first as? MTAccent, str)
+            XCTAssertEqual(accent.nucleus, nucleus, str)
+        }
+        // The same arrow as \vec, so it reads back as the shorter name.
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: "\\overrightarrow{x}"))
+        XCTAssertEqual(MTMathListBuilder.mathListToString(list), "\\vec{x}")
+    }
+
 	func testAccentedCharacter() throws {
 		let str = "á"
 		let list = MTMathListBuilder.build(fromString: str)!

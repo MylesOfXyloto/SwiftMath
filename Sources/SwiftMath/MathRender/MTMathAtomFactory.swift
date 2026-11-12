@@ -100,6 +100,11 @@ public class MTMathAtomFactory {
         "ddot" :  "\u{0308}",
         "check" :  "\u{030C}",
         "vec" :  "\u{20D7}",
+        // Handwriting recognisers write these for a vector. The arrow is the
+        // font's, widened to the variant that fits what's under it, as \vec's
+        // is; written back out, they read as \vec and its mirror.
+        "overrightarrow" :  "\u{20D7}",
+        "overleftarrow" :  "\u{20D6}",
         "widehat" :  "\u{0302}",
         "widetilde" :  "\u{0303}"
     ]

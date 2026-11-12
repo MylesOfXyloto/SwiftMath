@@ -115,7 +115,7 @@ def get_italic_correction(math_table):
         name = glyphs[i]
         record = records[i]
         if record.DeviceTable is not None:
-            raise "Don't know how to process device table for italic correction."
+            pass  # device tables ignored: the plain value is kept
         italic_dict[name] = record.Value
     return italic_dict
 
@@ -135,7 +135,7 @@ def get_accent_attachments(math_table):
         name = glyphs[i]
         record = records[i]
         if record.DeviceTable is not None:
-            raise "Don't know how to process device table for accent attachment."
+            pass  # device tables ignored: the plain value is kept
         attach_dict[name] = record.Value
     return attach_dict
 

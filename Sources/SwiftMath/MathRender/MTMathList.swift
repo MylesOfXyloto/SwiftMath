@@ -782,6 +782,9 @@ public class MTMathTable: MTMathAtom {
     /// Additional spacing between rows in jots (one jot is 0.3 times font size).
     /// If the additional spacing is 0, then normal row spacing is used are used.
     public var interRowAdditionalSpacing: CGFloat = 0
+    /// Horizontal rules across the table (`\hline`), each given by the row below it: 0 is
+    /// above the first row, `numRows` below the last.
+    public var hlines = [Int]()
     
     override public var finalized: MTMathAtom {
         let table = super.finalized as! MTMathTable
@@ -808,6 +811,7 @@ public class MTMathTable: MTMathAtom {
         self.interRowAdditionalSpacing = table.interRowAdditionalSpacing
         self.interColumnSpacing = table.interColumnSpacing
         self.environment = table.environment
+        self.hlines = table.hlines
         var cellCopy = [[MTMathList]]()
         for row in table.cells {
             var newRow = [MTMathList]()

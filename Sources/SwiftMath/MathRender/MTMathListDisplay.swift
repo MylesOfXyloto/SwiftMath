@@ -710,6 +710,31 @@ class MTLargeOpLimitsDisplay : MTDisplay {
     
 }
 
+// MARK: - MTRuleDisplay
+
+/// A horizontal rule across a table (`\hline`), centred on its position's baseline.
+class MTRuleDisplay : MTDisplay {
+
+    let thickness: CGFloat
+
+    init(width: CGFloat, thickness: CGFloat, position: CGPoint) {
+        self.thickness = thickness
+        super.init()
+        self.width = width
+        self.ascent = thickness / 2
+        self.descent = thickness / 2
+        self.position = position
+    }
+
+    override func draw(_ context: CGContext) {
+        super.draw(context)
+        context.saveGState()
+        context.setFillColor((self.textColor ?? MTColor.black).cgColor)
+        context.fill(CGRect(x: position.x, y: position.y - thickness / 2, width: width, height: thickness))
+        context.restoreGState()
+    }
+}
+
 // MARK: - MTLineDisplay
 
 /// Rendering of an list with an overline or underline

@@ -15,6 +15,8 @@ struct MTEnvProperties {
     var envName: String?
     var ended: Bool
     var numRows: Int
+    /// Where `\hline` drew a rule: the index of the row below it, so 0 is above the first row.
+    var hlines = Set<Int>()
     
     init(name: String?) {
         self.envName = name
@@ -244,6 +246,11 @@ public struct MTMathListBuilder {
                 return nil
             } else if char == "\\" {
                 let command = readCommand()
+                if command == "hline" && currentEnv != nil {
+                    // A rule across the table, above the row being read.
+                    currentEnv!.hlines.insert(currentEnv!.numRows)
+                    continue
+                }
                 let done = stopCommand(command, list:list, stopChar:stop)
                 if done != nil {
                     return done
@@ -402,12 +409,25 @@ public struct MTMathListBuilder {
                         if !table.environment.isEmpty {
                             str += "\\begin{\(table.environment)}"
                         }
+                        if table.environment == "array" {
+                            let spec = (0..<table.numColumns).map { column -> String in
+                                switch table.get(alignmentForColumn: column) {
+                                case .left: "l"
+                                case .center: "c"
+                                case .right: "r"
+                                }
+                            }
+                            str += "{\(spec.joined())}"
+                        }
                         
                         for i in 0..<table.numRows {
+                            if table.hlines.contains(i) {
+                                str += "\\hline "
+                            }
                             let row = table.cells[i]
                             for j in 0..<row.count {
                                 let cell = row[j]
-                                if table.environment == "matrix" {
+                                if table.environment == "matrix" || table.environment == "array" {
                                     if cell.atoms.count >= 1 && cell.atoms[0].type == .style {
                                         // remove first atom
                                         cell.atoms.removeFirst()
@@ -424,9 +444,12 @@ public struct MTMathListBuilder {
                                     str += "&"
                                 }
                             }
-                            if i < table.numRows - 1 {
+                            if i < table.numRows - 1 || table.hlines.contains(table.numRows) {
                                 str += "\\\\ "
                             }
+                        }
+                        if table.hlines.contains(table.numRows) {
+                            str += "\\hline "
                         }
                         if !table.environment.isEmpty {
                             str += "\\end{\(table.environment)}"
@@ -912,7 +935,38 @@ public struct MTMathListBuilder {
         assert(ch >= "\u{21}" && ch <= "\u{7E}", "Expected non-space character \(ch)")
     }
     
+    /// The column specification after `\begin{array}`: `l`, `c` or `r` per column. Vertical
+    /// rules (`|`) are read and left out.
+    mutating func readArrayColumns() -> [MTColumnAlignment]? {
+        self.skipSpaces()
+        if !self.expectCharacter("{") {
+            self.setError(.characterNotFound, message: "Missing column specification for array")
+            return nil
+        }
+        var columns = [MTColumnAlignment]()
+        while self.hasCharacters {
+            let ch = self.getNextCharacter()
+            switch ch {
+            case "}": return columns
+            case "l": columns.append(.left)
+            case "c": columns.append(.center)
+            case "r": columns.append(.right)
+            case "|", " ": continue
+            default:
+                self.setError(.invalidEnv, message: "Unsupported array column: \(ch)")
+                return nil
+            }
+        }
+        self.setError(.characterNotFound, message: "Missing }")
+        return nil
+    }
+
     mutating func buildTable(env: String?, firstList: MTMathList?, isRow: Bool) -> MTMathAtom? {
+        var arrayColumns: [MTColumnAlignment]?
+        if env == "array" {
+            guard let columns = self.readArrayColumns() else { return nil }
+            arrayColumns = columns
+        }
         // Save the current env till an new one gets built.
         let oldEnv = self.currentEnv
         
@@ -953,11 +1007,23 @@ public struct MTMathListBuilder {
             return nil
         }
         
+        // A `\\` just before `\end` ends the last row; it doesn't start an empty one.
+        if rows.count > 1, let last = rows.last, last.count <= 1, last.first?.atoms.isEmpty ?? true {
+            rows.removeLast()
+        }
+
         var error:NSError? = self.error
         let table = MTMathAtomFactory.table(withEnvironment: currentEnv?.envName, rows: rows, error: &error)
         if table == nil && self.error == nil {
             self.error = error
             return nil
+        }
+        // The table itself, or the table inside the delimiters a matrix environment adds.
+        if let grid = (table as? MTMathTable) ?? ((table as? MTInner)?.innerList?.atoms.first as? MTMathTable) {
+            grid.hlines = currentEnv!.hlines.filter { $0 <= rows.count }.sorted()
+            for (column, alignment) in (arrayColumns ?? []).enumerated() {
+                grid.set(alignment: alignment, forColumn: column)
+            }
         }
         self.currentEnv = oldEnv
         return table

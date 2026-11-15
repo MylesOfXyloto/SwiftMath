@@ -1035,6 +1035,47 @@ final class MTMathListBuilderTests: XCTestCase {
         XCTAssertEqual(latex, "\\begin{matrix}x&y\\\\ z&w\\end{matrix}");
     }
 
+    /// Vertical arithmetic as a handwriting recogniser writes it: one right-aligned column, a
+    /// rule under the sum, and a `\\\\` before `\\end` that starts no row.
+    func testArrayWithRule() throws {
+        let str = #"\begin{array}{r} 1 0 1 0 \\ + 1 0 0 1 \\ \hline \end{array}"#
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: str))
+        XCTAssertEqual(list.atoms.count, 1)
+        let table = try XCTUnwrap(list.atoms[0] as? MTMathTable)
+        XCTAssertEqual(table.environment, "array")
+        XCTAssertEqual(table.numRows, 2)
+        XCTAssertEqual(table.numColumns, 1)
+        XCTAssertEqual(table.get(alignmentForColumn: 0), .right)
+        XCTAssertEqual(table.hlines, [2])
+        XCTAssertEqual(MTMathListBuilder.mathListToString(list),
+                       #"\begin{array}{r}1010\\ +1001\\ \hline \end{array}"#)
+    }
+
+    func testArrayColumnsAndRules() throws {
+        let str = #"\begin{array}{l|cr} \hline a & b & c \\ \hline d & e & f \end{array}"#
+        let list = try XCTUnwrap(MTMathListBuilder.build(fromString: str))
+        let table = try XCTUnwrap(list.atoms.first as? MTMathTable)
+        XCTAssertEqual(table.numRows, 2)
+        XCTAssertEqual((0..<3).map { table.get(alignmentForColumn: $0) }, [.left, .center, .right])
+        XCTAssertEqual(table.hlines, [0, 1])
+        // Round trip.
+        let again = try XCTUnwrap(MTMathListBuilder.build(fromString: MTMathListBuilder.mathListToString(list)))
+        let copy = try XCTUnwrap(again.atoms.first as? MTMathTable)
+        XCTAssertEqual(copy.hlines, [0, 1])
+        XCTAssertEqual((0..<3).map { copy.get(alignmentForColumn: $0) }, [.left, .center, .right])
+    }
+
+    func testArrayErrors() throws {
+        var error: NSError?
+        XCTAssertNil(MTMathListBuilder.build(fromString: #"\begin{array} 1 \end{array}"#, error: &error))
+        error = nil
+        XCTAssertNil(MTMathListBuilder.build(fromString: #"\begin{array}{p} 1 \end{array}"#, error: &error))
+        XCTAssertEqual(error?.code, MTParseErrors.invalidEnv.rawValue)
+        error = nil
+        // A rule belongs in a table.
+        XCTAssertNil(MTMathListBuilder.build(fromString: #"x \hline y"#, error: &error))
+    }
+
     func testPMatrix() throws {
         let str = "\\begin{pmatrix} x & y \\\\ z & w \\end{pmatrix}";
         let  list = MTMathListBuilder.build(fromString:str)!

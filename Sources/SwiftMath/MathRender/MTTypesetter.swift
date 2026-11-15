@@ -1750,9 +1750,38 @@ public class MTTypesetter {
 
         // Position all the rows
         self.positionRows(rowDisplays, forTable:table)
-        let tableDisplay = MTMathListDisplay(withDisplays: rowDisplays, range: table!.indexRange)
+        let tableDisplay = MTMathListDisplay(withDisplays: rowDisplays + self.makeRules(forTable: table!, rows: rowDisplays, columnWidths: columnWidths), range: table!.indexRange)
         tableDisplay.position = currentPosition;
         return tableDisplay;
+    }
+
+    /// Clear space between an `\hline` and the rows either side of it.
+    var ruleGap: CGFloat { 0.15 * styleFont.fontSize }
+
+    /// The `\hline` rules across a table whose rows are in place: as thick as a fraction bar,
+    /// as wide as the table. Between two rows, a rule sits halfway; above the first row or
+    /// below the last, at least as far out as TeX's strut would put it (0.7 and 0.3 of a
+    /// baseline), so a short row doesn't pull the rule onto its letters.
+    func makeRules(forTable table: MTMathTable, rows: [MTDisplay], columnWidths: [CGFloat]) -> [MTDisplay] {
+        guard !table.hlines.isEmpty, !rows.isEmpty else { return [] }
+        let thickness = styleFont.mathTable!.fractionRuleThickness
+        let spacing = table.interColumnSpacing * styleFont.mathTable!.muUnit
+        let width = columnWidths.reduce(0, +) + spacing * CGFloat(max(0, columnWidths.count - 1))
+        let baselineSkip = kBaseLineSkipMultiplier * styleFont.fontSize
+        return table.hlines.map { index -> MTDisplay in
+            let y: CGFloat
+            if index <= 0 {
+                let first = rows[0]
+                y = first.position.y + max(first.ascent + ruleGap, 0.7 * baselineSkip)
+            } else if index >= rows.count {
+                let last = rows[rows.count - 1]
+                y = last.position.y - max(last.descent + ruleGap, 0.3 * baselineSkip)
+            } else {
+                let above = rows[index - 1], below = rows[index]
+                y = ((above.position.y - above.descent) + (below.position.y + below.ascent)) / 2
+            }
+            return MTRuleDisplay(width: width, thickness: thickness, position: CGPointMake(0, y))
+        }
     }
     
     // Typeset every cell in the table. As a side-effect calculate the max column width of each column.
@@ -1812,7 +1841,7 @@ public class MTTypesetter {
         var prevRowDescent = CGFloat(0)
         var ascent = CGFloat(0)
         var first = true
-        for row in rows {
+        for (index, row) in rows.enumerated() {
             if first {
                 row.position = CGPointZero;
                 ascent += row.ascent;
@@ -1822,6 +1851,11 @@ public class MTTypesetter {
                 if (skip - (prevRowDescent + row.ascent) < lineSkipLimit) {
                     // rows are too close to each other. Space them apart further
                     skip = prevRowDescent + row.ascent + lineSkip;
+                }
+                if table!.hlines.contains(index) {
+                    // Room for a rule between the rows, clear of both.
+                    skip = max(skip, prevRowDescent + row.ascent + 2 * ruleGap
+                                     + styleFont.mathTable!.fractionRuleThickness)
                 }
                 // We are going down so we decrease the y value.
                 currPos -= skip;

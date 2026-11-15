@@ -207,6 +207,43 @@ final class MTTypesetterTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(gap, 0.4 * em - 0.01)
     }
 
+    /// The \\hline displays of a typeset table.
+    private func rules(_ latex: String) throws -> (rules: [MTDisplay], rows: [MTDisplay]) {
+        let mathList = try XCTUnwrap(MTMathListBuilder.build(fromString: latex))
+        let display = try XCTUnwrap(MTTypesetter.createLineForMathList(mathList, font: self.font, style: .display))
+        let table = try XCTUnwrap(display.subDisplays.first as? MTMathListDisplay)
+        let rules = table.subDisplays.filter { $0 is MTRuleDisplay }
+        return (rules, table.subDisplays.filter { !($0 is MTRuleDisplay) })
+    }
+
+    /// A sum's rule runs under the whole sum, clear of the digits above it.
+    func testRuleUnderASum() throws {
+        let (rules, rows) = try rules(#"\begin{array}{r} 1010 \\ +1001 \\ \hline \end{array}"#)
+        XCTAssertEqual(rules.count, 1)
+        let rule = rules[0], last = rows[1]
+        XCTAssertLessThan(rule.position.y + rule.ascent, last.position.y - last.descent)
+        XCTAssertEqual(rule.width, rows.map(\.width).max()!, accuracy: 0.01)
+        XCTAssertGreaterThan(rule.ascent + rule.descent, 0)
+    }
+
+    /// Between the addends and the result, the rule sits clear of both.
+    func testRuleBetweenRows() throws {
+        let (rules, rows) = try rules(#"\begin{array}{r} 1010 \\ +1001 \\ \hline 10011 \end{array}"#)
+        XCTAssertEqual(rules.count, 1)
+        let rule = rules[0]
+        XCTAssertLessThan(rule.position.y + rule.ascent, rows[1].position.y - rows[1].descent)
+        XCTAssertGreaterThan(rule.position.y - rule.descent, rows[2].position.y + rows[2].ascent)
+        // As wide as the widest row's contents, the sign included.
+        let cells = try rows.map { try XCTUnwrap(($0 as? MTMathListDisplay)?.subDisplays.first) }
+        XCTAssertEqual(rule.width, cells.map(\.width).max()!, accuracy: 0.01)
+    }
+
+    /// Right alignment puts the digits of every row in the same columns.
+    func testArrayRightAligns() throws {
+        let (_, rows) = try rules(#"\begin{array}{r} 1010 \\ 10011 \end{array}"#)
+        XCTAssertEqual(rows[0].position.x + rows[0].width, rows[1].position.x + rows[1].width, accuracy: 0.01)
+    }
+
     /// Maths inside a sentence separates no statements: its commas list things, `A, B`, and
     /// keep the thin space.
     func testCommasInsideASentenceStayThin() throws {

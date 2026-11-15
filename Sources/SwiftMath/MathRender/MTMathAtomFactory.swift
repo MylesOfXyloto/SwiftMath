@@ -847,6 +847,18 @@ public class MTMathAtomFactory {
                 } else {
                     return table
                 }
+            } else if env == "array" {
+                // Columns aligned as the specification after \\begin{array} says (set by the
+                // parser); cells in text style and a quad apart, as in a matrix.
+                table.interRowAdditionalSpacing = 0
+                table.interColumnSpacing = 18
+                let style = MTMathStyle(style: .text)
+                for i in 0..<table.cells.count {
+                    for j in 0..<table.cells[i].count {
+                        table.cells[i][j].insert(style, at: 0)
+                    }
+                }
+                return table
             } else if env == "eqalign" || env == "split" || env == "aligned" {
                 if table.numColumns != 2 {
                     let message = "\(env) environment can only have 2 columns"

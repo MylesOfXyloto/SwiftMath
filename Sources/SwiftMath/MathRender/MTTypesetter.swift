@@ -380,6 +380,21 @@ public class MTTypesetter {
 
     /// Whether the comma placed last is one of those.
     private var lastCommaSeparatesStatements = false
+
+    /// The superscript just placed on its own — no subscript with it — and how far it and the
+    /// space after it carry the next atom past where it would sit with no script at all.
+    /// Read by the next atom only.
+    private var superscriptBefore: (display: MTMathListDisplay, room: CGFloat)?
+
+    private static let tuckKey = "SwiftMath.tucksUnderSuperscripts"
+
+    /// Whether a letter right after a superscript is drawn in under it, as far as the slant of
+    /// its stroke allows, so that `B^2A` reads as closely as `B^2T`. Off, as in TeX, unless a
+    /// typesetting asks for it; then on for every part of that expression, typeset on this thread
+    /// meanwhile.
+    static var tucksUnderSuperscripts: Bool {
+        Thread.current.threadDictionary[tuckKey] as? Bool ?? false
+    }
     
     /// Typesets a math list without a view, for drawing straight into a
     /// context — what `MTMathUILabel` does when it lays itself out.
@@ -387,8 +402,17 @@ public class MTTypesetter {
     /// `separatesStatements`: whether the list stands on its own, so that a comma at its top
     /// level separates statements and is followed by a quad. Off for maths inside a sentence,
     /// where a comma separates the items of a list, `A, B \in X`, and keeps TeX's thin space.
+    ///
+    /// `tucksUnderSuperscripts`: whether a letter right after a superscript is drawn in under it,
+    /// treating the slant of the letter's stroke as its edge rather than the tip of its serif —
+    /// `B^2A` as close as `B^2T`. A departure from TeX, so off unless asked for.
     public static func createLineForMathList(_ mathList:MTMathList?, font:MTFont?, style:MTLineStyle,
-                                             separatesStatements: Bool = true) -> MTMathListDisplay? {
+                                             separatesStatements: Bool = true,
+                                             tucksUnderSuperscripts: Bool = false) -> MTMathListDisplay? {
+        let threadValues = Thread.current.threadDictionary
+        let previous = threadValues[tuckKey]
+        threadValues[tuckKey] = tucksUnderSuperscripts
+        defer { threadValues[tuckKey] = previous }
         let finalizedList = mathList?.finalized
         // default is not cramped
         return self.createLineForMathList(finalizedList, font:font, style:style, cramped:false, spaced:false,
@@ -522,6 +546,8 @@ public class MTTypesetter {
         var lastType:MTMathAtomType!
         if isStatementLevel { statementCommas = Self.statementCommas(in: preprocessed) }
         for (index, atom) in preprocessed.enumerated() {
+            let superscriptBefore = self.superscriptBefore
+            self.superscriptBefore = nil
             // Counted once the atom is placed, so the space before a bracket is measured
             // from outside it.
             defer {
@@ -771,6 +797,11 @@ public class MTTypesetter {
                         } else {
                             // increase the space
                             currentPosition.x += interElementSpace
+                            if let superscriptBefore, interElementSpace == 0, atom.type == .ordinary,
+                               Self.tucksUnderSuperscripts {
+                                currentPosition.x -= self.tuck(atom, under: superscriptBefore.display,
+                                                               room: superscriptBefore.room)
+                            }
                         }
                     }
                     var current:NSAttributedString? = nil
@@ -1002,6 +1033,7 @@ public class MTTypesetter {
             displayAtoms.append(superScript!)
             // update the position
             currentPosition.x += superScript!.width + styleFont.mathTable!.spaceAfterScript;
+            superscriptBefore = (superScript!, superScript!.width + styleFont.mathTable!.spaceAfterScript)
             return;
         }
         let ssubscript = MTTypesetter.createLineForMathList(atom!.subScript, font:font, style:self.scriptStyle(), cramped:self.subscriptCramped())
@@ -1029,6 +1061,47 @@ public class MTTypesetter {
         currentPosition.x += max(superScript!.width + delta, ssubscript!.width) + styleFont.mathTable!.spaceAfterScript;
     }
     
+    // MARK: - Tucking under a superscript
+
+    /// How far to draw `atom`, about to be placed at `currentPosition`, in under `superscript`,
+    /// the script just before it. TeX leaves the space after a script and nothing more, which
+    /// suits a letter whose left edge is upright, `B^2T`, but leaves a hole beside a slanted one,
+    /// `B^2A`: at the superscript's height an A's stroke is well right of the tip of its serif.
+    /// So the letter's edge at that height is drawn in to where the tip of its serif was.
+    ///
+    /// Only so far that the letter keeps the space after a script clear of the superscript all
+    /// round, and never comes nearer the base than it would with no superscript (`room`). A
+    /// letter shorter than the superscript's middle, `B^2a`, isn't beside it, and stays.
+    func tuck(_ atom: MTMathAtom, under superscript: MTMathListDisplay, room: CGFloat) -> CGFloat {
+        guard atom.type == .ordinary, !atom.nucleus.isEmpty else { return 0 }
+        let glyph = findGlyphForCharacterAtIndex(atom.nucleus.startIndex, inString: atom.nucleus)
+        guard glyph != 0 else { return 0 }
+        // Rows a 64th of an em high: fine enough for a slant, cheap enough to do as it's set.
+        let step = styleFont.fontSize / 64
+        let script = MTInkProfile(display: superscript, step: step)
+        guard let letter = MTInkProfile(glyph: glyph, font: styleFont.ctFont, origin: currentPosition, step: step),
+              let letterTop = letter.highestRow, let leftmost = letter.leftmost,
+              let scriptBottom = script.lowestRow, let scriptTop = script.highestRow,
+              letterTop >= (scriptBottom + scriptTop) / 2
+        else { return 0 }
+
+        // The letter's edge beside the superscript, drawn in to where its leftmost point was.
+        guard let edge = script.rows.keys.compactMap({ letter.left($0) }).min() else { return 0 }
+        var shift = edge - leftmost
+
+        // No nearer the superscript than the space after a script, across and round its corners.
+        let clearance = styleFont.mathTable!.spaceAfterScript
+        let surround = script.grown(by: Int((clearance / step).rounded(.up)))
+        for (row, extent) in letter.rows {
+            if let right = surround.right(row) {
+                shift = min(shift, extent.lowerBound - right - clearance)
+            }
+        }
+        // No nearer the base than with no superscript at all.
+        shift = min(shift, room)
+        return max(0, shift)
+    }
+
     // MARK: - Fractions
     
     func numeratorShiftUp(_ hasRule:Bool) -> CGFloat {
